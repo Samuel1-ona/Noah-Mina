@@ -132,10 +132,8 @@ export function useNoahSDK() {
             // (registerKYC uses this.sender.getAndRequireSignature())
             const feePayerAddress = sdk.feePayerPublicKey.toBase58();
 
-            // Store a ref so other steps can access the user's public key
-            userKeyRef.current = {
-                toPublicKey: () => sdk.feePayerPublicKey
-            };
+            // Store a ref so other steps can access the user's private key
+            userKeyRef.current = sdk.feePayerPrivateKey;
 
             setSDKStatus({
                 initialized: true,

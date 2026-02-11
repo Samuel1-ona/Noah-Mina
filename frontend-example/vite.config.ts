@@ -10,9 +10,9 @@ export default defineConfig({
     target: 'esnext',
   },
 
-  // Prevent Vite from pre-bundling o1js (it has WASM + workers)
+  // Prevent Vite from pre-bundling o1js and our local SDK (to avoid stale cache)
   optimizeDeps: {
-    exclude: ['o1js'],
+    exclude: ['o1js', 'noah-mina-sdk'],
     esbuildOptions: {
       target: 'esnext',
     },
