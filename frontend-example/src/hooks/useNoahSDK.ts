@@ -149,6 +149,21 @@ export function useNoahSDK() {
             });
 
             addLog(`✅ SDK ready! Address: ${feePayerAddress.slice(0, 12)}...`);
+
+            // ── KYC Status Guard ──────────────────────────────────
+            addLog('Checking KYC status...');
+            const hasKYC = await sdk.hasActiveKYC(sdk.feePayerPublicKey);
+            if (hasKYC) {
+                addLog('✨ Address already has an active KYC record. Skipping verification.');
+                setKycRecord({
+                    commitment: 'Exists on-chain',
+                    issuerHash: 'Verified Attester',
+                    registeredAt: new Date().toISOString(),
+                    isActive: true,
+                    address: feePayerAddress,
+                });
+                setCurrentStep('verified');
+            }
         } catch (err: any) {
             console.error('SDK init error:', err);
             setError(`SDK initialization failed: ${err.message}`);
@@ -197,11 +212,15 @@ export function useNoahSDK() {
 
     const onMRZScanned = useCallback(
         (data: MRZData) => {
+            if (kycRecord?.isActive) {
+                addLog('⚠️ Error: Account already verified.');
+                return;
+            }
             setMrzData(data);
             addLog(`MRZ scanned: ${data.fullName} (${data.nationality})`);
             setCurrentStep('witness');
         },
-        [addLog]
+        [addLog, kycRecord]
     );
 
     // ── Step 2: Witness (Real Attestation) ─────────────────────
