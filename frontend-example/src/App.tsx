@@ -45,19 +45,60 @@ function App() {
         <div className="step-content connect-content">
           <div className="connect-icon">🔗</div>
           <h2>Connect Your Wallet</h2>
+
+          <div className="network-selector">
+            <button
+              className={`btn-outline ${sdk.networkMode === 'local' ? 'active' : ''}`}
+              onClick={() => sdk.setNetworkMode('local')}
+            >
+              Local Testnet
+            </button>
+            <button
+              className={`btn-outline ${sdk.networkMode === 'devnet' ? 'active' : ''}`}
+              onClick={() => sdk.setNetworkMode('devnet')}
+            >
+              Mina Devnet
+            </button>
+          </div>
+
+          {sdk.networkMode === 'devnet' && (
+            <div className="devnet-config">
+              <label>KYC Registry Address (Devnet)</label>
+              <input
+                type="text"
+                placeholder="B62..."
+                value={sdk.devnetContractAddress}
+                onChange={(e) => sdk.setDevnetContractAddress(e.target.value)}
+                className="input-field"
+              />
+              <p className="input-hint">
+                Deploy using <code>zk deploy devnet</code> and paste the address here.
+              </p>
+            </div>
+          )}
+
           <p>
-            Start a local Mina blockchain with a test wallet to begin the KYC
-            verification process.
+            {sdk.networkMode === 'local'
+              ? 'Start a local Mina blockchain with a test wallet to begin.'
+              : 'Connect to the Mina Devnet to verify your identity on-chain.'}
           </p>
           <button
             className="btn btn-primary"
             onClick={sdk.connectWallet}
             disabled={sdk.loading}
           >
-            {sdk.loading ? <span className="spinner" /> : '⚡ Start Local Test Mode'}
+            {sdk.loading ? (
+              <span className="spinner" />
+            ) : sdk.networkMode === 'local' ? (
+              '⚡ Start Local Test Mode'
+            ) : (
+              '🔗 Connect to Devnet'
+            )}
           </button>
           <p className="init-note">
-            Uses Mina LocalBlockchain — real transactions with test keys.
+            {sdk.networkMode === 'local'
+              ? 'Uses Mina LocalBlockchain — real transactions with test keys.'
+              : 'Requires a pre-deployed contract and a Devnet account.'}
           </p>
         </div>
       );

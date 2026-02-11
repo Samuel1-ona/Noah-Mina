@@ -60,11 +60,15 @@ export function useNoahSDK() {
     const sdkRef = useRef<any>(null);
     const userKeyRef = useRef<any>(null);
 
+    const [devnetContractAddress, setDevnetContractAddress] = useState<string>(
+        import.meta.env.VITE_CONTRACT_ADDRESS || ''
+    );
     const [wallet, setWallet] = useState<WalletState>({
         connected: false,
         address: null,
         network: null,
     });
+    const [networkMode, setNetworkMode] = useState<'local' | 'devnet'>('local');
     const [sdkStatus, setSDKStatus] = useState<SDKStatus>({
         initialized: false,
         compiling: false,
@@ -88,7 +92,7 @@ export function useNoahSDK() {
         console.log(`[NoahSDK] ${msg}`);
     }, []);
 
-    // ── Initialize SDK (Local Test Mode) ──────────────────────
+    // ── Initialize SDK ────────────────────────────────────────
 
     const initSDK = useCallback(async () => {
         setSDKStatus((s) => ({
@@ -96,43 +100,65 @@ export function useNoahSDK() {
             compiling: true,
             compilationProgress: 'Loading o1js...',
         }));
-        addLog('Importing o1js and noah-mina-sdk...');
+        addLog(`Importing o1js and noah-mina-sdk (${networkMode} mode)...`);
 
         try {
-            // Dynamic import to avoid loading heavy module upfront
             const { NoahSDK } = await import('noah-mina-sdk');
+            const { PrivateKey, PublicKey } = await import('o1js');
 
-            addLog('o1js loaded. Initializing local blockchain...');
-            setSDKStatus((s) => ({
-                ...s,
-                compilationProgress: 'Starting local blockchain...',
-            }));
+            let sdk;
+            if (networkMode === 'local') {
+                addLog('o1js loaded. Initializing local blockchain...');
+                setSDKStatus((s) => ({
+                    ...s,
+                    compilationProgress: 'Starting local blockchain...',
+                }));
+                sdk = await NoahSDK.init({ network: 'local' });
+            } else {
+                // Devnet Mode
+                const devnetUrl = import.meta.env.VITE_MINA_NETWORK_URL || 'https://api.minascan.io/node/devnet/v1/graphql';
+                const archiveUrl = import.meta.env.VITE_ARCHIVE_URL || 'https://api.minascan.io/archive/devnet/v1/graphql';
 
-            // Init SDK with local blockchain (proofs disabled for speed)
-            // The SDK uses testAccounts[0] as fee payer automatically
-            const sdk = await NoahSDK.init({ network: 'local' });
+                addLog(`Connecting to Devnet: ${devnetUrl}...`);
+                setSDKStatus((s) => ({
+                    ...s,
+                    compilationProgress: 'Connecting to Devnet...',
+                }));
+
+                const feePayerKeyStr = import.meta.env.VITE_FEE_PAYER_KEY;
+
+                if (!devnetContractAddress) {
+                    throw new Error('Please enter the NoahKYCRegistry contract address for Devnet mode. You can get this after running "zk deploy devnet".');
+                }
+
+                sdk = await NoahSDK.init({
+                    network: devnetUrl,
+                    archiveUrl: archiveUrl,
+                    contractAddress: PublicKey.fromBase58(devnetContractAddress),
+                    feePayerKey: feePayerKeyStr ? PrivateKey.fromBase58(feePayerKeyStr) : undefined,
+                });
+            }
+
             sdkRef.current = sdk;
 
-            addLog('Local blockchain running.');
-
-            setSDKStatus((s) => ({
-                ...s,
-                compilationProgress: 'Deploying KYC registry contract...',
-            }));
-            addLog('Deploying NoahKYCRegistry contract...');
-
-            // Deploy uses the SDK's internally stored contract key
-            const deployResult = await sdk.deploy();
-            if (!deployResult.success) {
-                throw new Error(`Deploy failed: ${deployResult.error}`);
+            if (networkMode === 'local') {
+                addLog('Local blockchain running.');
+                setSDKStatus((s) => ({
+                    ...s,
+                    compilationProgress: 'Deploying KYC registry contract...',
+                }));
+                addLog('Deploying NoahKYCRegistry contract...');
+                const deployResult = await sdk.deploy();
+                if (!deployResult.success) {
+                    throw new Error(`Deploy failed: ${deployResult.error}`);
+                }
+                addLog('✅ Contract deployed successfully (Local)!');
+            } else {
+                addLog('✅ SDK connected to Devnet!');
+                addLog(`   Contract: ${sdk.contract.address.toBase58().slice(0, 16)}...`);
             }
-            addLog('✅ Contract deployed successfully!');
 
-            // In local test mode, the fee payer IS the user
-            // (registerKYC uses this.sender.getAndRequireSignature())
             const feePayerAddress = sdk.feePayerPublicKey.toBase58();
-
-            // Store a ref so other steps can access the user's private key
             userKeyRef.current = sdk.feePayerPrivateKey;
 
             setSDKStatus({
@@ -145,7 +171,7 @@ export function useNoahSDK() {
             setWallet({
                 connected: true,
                 address: feePayerAddress,
-                network: 'local-testnet',
+                network: networkMode === 'local' ? 'local-testnet' : 'devnet',
             });
 
             addLog(`✅ SDK ready! Address: ${feePayerAddress.slice(0, 12)}...`);
@@ -175,20 +201,20 @@ export function useNoahSDK() {
             });
             addLog(`❌ Error: ${err.message}`);
         }
-    }, [addLog]);
+    }, [addLog, networkMode, devnetContractAddress]);
 
     // ── Connect (starts SDK init) ──────────────────────────────
 
     const connectWallet = useCallback(async () => {
         setLoading(true);
         setError(null);
-        addLog('Starting SDK initialization (Local Test Mode)...');
+        addLog(`Starting SDK initialization (${networkMode} mode)...`);
         try {
             await initSDK();
         } finally {
             setLoading(false);
         }
-    }, [initSDK, addLog]);
+    }, [initSDK, addLog, networkMode]);
 
     const disconnectWallet = useCallback(() => {
         setWallet({ connected: false, address: null, network: null });
@@ -345,7 +371,7 @@ export function useNoahSDK() {
                 registeredAt: new Date().toISOString(),
                 isActive: hasKYC,
                 address: wallet.address || '',
-                txHash: `local_tx_${Date.now().toString(36)}`,
+                txHash: networkMode === 'local' ? `local_tx_${Date.now().toString(36)}` : 'devnet_tx_pending',
             };
 
             setKycRecord(record);
@@ -357,7 +383,7 @@ export function useNoahSDK() {
         } finally {
             setLoading(false);
         }
-    }, [mrzData, wallet.address, addLog]);
+    }, [mrzData, wallet.address, addLog, networkMode]);
 
     // ── Step Navigation ────────────────────────────────────────
 
@@ -369,6 +395,8 @@ export function useNoahSDK() {
         // State
         wallet,
         sdkStatus,
+        networkMode,
+        setNetworkMode,
         currentStep,
         mrzData,
         credential,
@@ -377,6 +405,8 @@ export function useNoahSDK() {
         loading,
         error,
         logs,
+        devnetContractAddress,
+        setDevnetContractAddress,
 
         // Step info
         steps: STEPS,
