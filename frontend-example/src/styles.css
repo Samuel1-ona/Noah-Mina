@@ -732,6 +732,107 @@ body {
   text-decoration: underline;
 }
 
+/* ── Init / Loading State ──────────────────────────────────── */
+.init-spinner {
+  margin-bottom: 16px;
+}
+
+.spinner.large {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+  margin: 0 auto;
+}
+
+.init-status {
+  color: var(--accent-hover) !important;
+  font-weight: 600;
+  font-size: 0.9rem !important;
+}
+
+.init-note {
+  color: var(--text-muted) !important;
+  font-size: 0.76rem !important;
+  font-style: italic;
+}
+
+code {
+  background: rgba(99, 102, 241, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.78em;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--accent-hover);
+}
+
+/* ── Transaction Info ──────────────────────────────────────── */
+.tx-info {
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+/* ── Transaction Log Panel ─────────────────────────────────── */
+.log-panel {
+  width: 100%;
+  max-width: 520px;
+  margin-top: 24px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--card-border);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.log-badge {
+  background: var(--accent);
+  color: white;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.log-body {
+  padding: 12px 16px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.7rem;
+  line-height: 1.8;
+  color: var(--text-muted);
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.log-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.log-body::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 2px;
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .header {

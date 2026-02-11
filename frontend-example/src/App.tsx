@@ -1,7 +1,7 @@
 /**
  * Noah-Mina — Privacy-Preserving KYC
  *
- * 5-Step Flow:
+ * 5-Step Flow (Real SDK Integration):
  * 1. Scan — Upload passport → MRZ OCR
  * 2. Witness — Attester verifies & signs credential
  * 3. Proof — Generate ZK proof client-side
@@ -10,26 +10,55 @@
  */
 import { useNoahSDK, STEPS } from './hooks/useNoahSDK';
 import { MRZScanner } from './components/MRZScanner';
+import { useRef, useEffect } from 'react';
 import './styles.css';
 
 function App() {
   const sdk = useNoahSDK();
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll log panel
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [sdk.logs]);
 
   const renderStepContent = () => {
-    // If not connected, show connect prompt
+    // SDK initializing
+    if (sdk.sdkStatus.compiling) {
+      return (
+        <div className="step-content connect-content">
+          <div className="init-spinner">
+            <div className="spinner large" />
+          </div>
+          <h2>Initializing SDK</h2>
+          <p className="init-status">{sdk.sdkStatus.compilationProgress}</p>
+          <p className="init-note">
+            Setting up local Mina blockchain and deploying the KYC contract...
+          </p>
+        </div>
+      );
+    }
+
+    // Not connected — show connect prompt
     if (!sdk.wallet.connected) {
       return (
         <div className="step-content connect-content">
           <div className="connect-icon">🔗</div>
           <h2>Connect Your Wallet</h2>
-          <p>Connect your Auro wallet to begin the KYC verification process.</p>
+          <p>
+            Start a local Mina blockchain with a test wallet to begin the KYC
+            verification process.
+          </p>
           <button
             className="btn btn-primary"
             onClick={sdk.connectWallet}
             disabled={sdk.loading}
           >
-            {sdk.loading ? <span className="spinner" /> : '🦊 Connect Auro Wallet'}
+            {sdk.loading ? <span className="spinner" /> : '⚡ Start Local Test Mode'}
           </button>
+          <p className="init-note">
+            Uses Mina LocalBlockchain — real transactions with test keys.
+          </p>
         </div>
       );
     }
@@ -88,8 +117,8 @@ function App() {
                 </div>
               )}
               <p className="witness-note">
-                This data will be sent to a trusted attester for verification.
-                The attester will sign a credential without storing your data.
+                This data will be sent to the attester for verification.
+                The attester signs a credential using <code>Credential.sign()</code> from mina-attestations.
               </p>
               <button
                 className="btn btn-primary full-width"
@@ -113,8 +142,8 @@ function App() {
               <div className="proof-icon">🔐</div>
               <h3>Generate Zero-Knowledge Proof</h3>
               <p>
-                Your proof runs <strong>entirely in your browser</strong>.
-                It proves you meet the requirements without revealing your personal data.
+                Creates a ZK presentation using <code>mina-attestations</code>.
+                Proves age ≥ 18 without revealing your birth date.
               </p>
               <div className="proof-claims">
                 <div className="claim-badge">✓ Age ≥ 18</div>
@@ -127,13 +156,16 @@ function App() {
                 disabled={sdk.loading}
               >
                 {sdk.loading ? (
-                  <span className="spinner" />
+                  <>
+                    <span className="spinner" />
+                    <span>Compiling circuit...</span>
+                  </>
                 ) : (
                   '🧮 Generate ZK Proof'
                 )}
               </button>
               <p className="privacy-note">
-                🛡️ Your identity data never leaves your device
+                🛡️ Runs entirely in your browser — data never leaves your device
               </p>
             </div>
           </div>
@@ -146,30 +178,29 @@ function App() {
               <div className="submit-icon">⛓️</div>
               <h3>Register KYC On-Chain</h3>
               <p>
-                Store a privacy-preserving commitment on Mina. Verifiers can
-                check your KYC status without seeing your data.
+                Sends a <code>registerKYC</code> transaction to the smart contract,
+                then settles the offchain state.
               </p>
-              {sdk.presentation && (
-                <div className="proof-details">
-                  <div className="field-row">
-                    <span className="field-label">Proof Hash</span>
-                    <span className="field-value mono">
-                      {sdk.presentation.proofHash.slice(0, 18)}...
-                    </span>
-                  </div>
-                  <div className="field-row">
-                    <span className="field-label">Proof Type</span>
-                    <span className="field-value tag">Age Verification</span>
-                  </div>
+              <div className="tx-info">
+                <div className="field-row">
+                  <span className="field-label">Method</span>
+                  <span className="field-value mono">registerKYC + settle</span>
                 </div>
-              )}
+                <div className="field-row">
+                  <span className="field-label">Network</span>
+                  <span className="field-value tag">Local Blockchain</span>
+                </div>
+              </div>
               <button
                 className="btn btn-success full-width"
                 onClick={sdk.registerOnChain}
                 disabled={sdk.loading}
               >
                 {sdk.loading ? (
-                  <span className="spinner" />
+                  <>
+                    <span className="spinner" />
+                    <span>Sending transaction...</span>
+                  </>
                 ) : (
                   '⛓️ Register on Mina'
                 )}
@@ -191,7 +222,7 @@ function App() {
                     <span className="field-label">Status</span>
                     <span className="field-value">
                       <span className="status-dot active" />
-                      Active
+                      {sdk.kycRecord.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </div>
                   <div className="field-row">
@@ -212,11 +243,21 @@ function App() {
                       {new Date(sdk.kycRecord.registeredAt).toLocaleString()}
                     </span>
                   </div>
+                  {sdk.kycRecord.txHash && (
+                    <div className="field-row">
+                      <span className="field-label">Tx Hash</span>
+                      <span className="field-value mono">
+                        {sdk.kycRecord.txHash}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="bool-result">
                 <span className="bool-label">hasKYC(address)</span>
-                <span className="bool-value true">→ true</span>
+                <span className={`bool-value ${sdk.kycRecord?.isActive ? 'true' : 'false'}`}>
+                  → {sdk.kycRecord?.isActive ? 'true' : 'false'}
+                </span>
               </div>
             </div>
           </div>
@@ -244,7 +285,7 @@ function App() {
             <button
               className="btn btn-wallet"
               onClick={sdk.connectWallet}
-              disabled={sdk.loading}
+              disabled={sdk.loading || sdk.sdkStatus.compiling}
             >
               Connect Wallet
             </button>
@@ -287,6 +328,24 @@ function App() {
         <div className="card-container">
           <div className="main-card">{renderStepContent()}</div>
         </div>
+
+        {/* Transaction Log */}
+        {sdk.logs.length > 0 && (
+          <div className="log-panel">
+            <div className="log-header">
+              <span>📋 Transaction Log</span>
+              <span className="log-badge">{sdk.logs.length}</span>
+            </div>
+            <div className="log-body">
+              {sdk.logs.map((log, i) => (
+                <div key={i} className="log-line">
+                  {log}
+                </div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer */}

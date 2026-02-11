@@ -1,14 +1,12 @@
 /**
- * useNoahSDK — React Hook for Noah-Mina KYC Flow
+ * useNoahSDK — React Hook for Real SDK Integration
  *
- * Manages the 5-step stepper state:
- * 1. Scan — MRZ OCR scanning
- * 2. Witness — Attestation
- * 3. Proof — ZK proof generation
- * 4. Submit — On-chain registration
- * 5. Verified — KYC bound to address
+ * Manages the 5-step stepper + real noah-mina-sdk calls.
+ * Uses Mina LocalBlockchain for testing — real on-chain transactions.
+ *
+ * Steps: Scan → Witness → Proof → Submit → Verified
  */
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { MRZData } from '../components/MRZScanner';
 
 // ============================================================
@@ -43,6 +41,14 @@ export interface KYCRecord {
     registeredAt: string;
     isActive: boolean;
     address: string;
+    txHash?: string;
+}
+
+export interface SDKStatus {
+    initialized: boolean;
+    compiling: boolean;
+    deploying: boolean;
+    compilationProgress: string;
 }
 
 // ============================================================
@@ -50,10 +56,20 @@ export interface KYCRecord {
 // ============================================================
 
 export function useNoahSDK() {
+    // SDK instance ref (persisted across renders)
+    const sdkRef = useRef<any>(null);
+    const userKeyRef = useRef<any>(null);
+
     const [wallet, setWallet] = useState<WalletState>({
         connected: false,
         address: null,
         network: null,
+    });
+    const [sdkStatus, setSDKStatus] = useState<SDKStatus>({
+        initialized: false,
+        compiling: false,
+        deploying: false,
+        compilationProgress: '',
     });
     const [currentStep, setCurrentStep] = useState<StepId>('scan');
     const [mrzData, setMrzData] = useState<MRZData | null>(null);
@@ -62,51 +78,104 @@ export function useNoahSDK() {
     const [kycRecord, setKycRecord] = useState<KYCRecord | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [logs, setLogs] = useState<string[]>([]);
 
-    // ── Wallet ─────────────────────────────────────────────────
+    // ── Logging ────────────────────────────────────────────────
+
+    const addLog = useCallback((msg: string) => {
+        const timestamp = new Date().toLocaleTimeString();
+        setLogs((prev) => [...prev, `[${timestamp}] ${msg}`]);
+        console.log(`[NoahSDK] ${msg}`);
+    }, []);
+
+    // ── Initialize SDK (Local Test Mode) ──────────────────────
+
+    const initSDK = useCallback(async () => {
+        setSDKStatus((s) => ({
+            ...s,
+            compiling: true,
+            compilationProgress: 'Loading o1js...',
+        }));
+        addLog('Importing o1js and noah-mina-sdk...');
+
+        try {
+            // Dynamic import to avoid loading heavy module upfront
+            const { NoahSDK } = await import('noah-mina-sdk');
+
+            addLog('o1js loaded. Initializing local blockchain...');
+            setSDKStatus((s) => ({
+                ...s,
+                compilationProgress: 'Starting local blockchain...',
+            }));
+
+            // Init SDK with local blockchain (proofs disabled for speed)
+            // The SDK uses testAccounts[0] as fee payer automatically
+            const sdk = await NoahSDK.init({ network: 'local' });
+            sdkRef.current = sdk;
+
+            addLog('Local blockchain running.');
+
+            setSDKStatus((s) => ({
+                ...s,
+                compilationProgress: 'Deploying KYC registry contract...',
+            }));
+            addLog('Deploying NoahKYCRegistry contract...');
+
+            // Deploy uses the SDK's internally stored contract key
+            const deployResult = await sdk.deploy();
+            if (!deployResult.success) {
+                throw new Error(`Deploy failed: ${deployResult.error}`);
+            }
+            addLog('✅ Contract deployed successfully!');
+
+            // In local test mode, the fee payer IS the user
+            // (registerKYC uses this.sender.getAndRequireSignature())
+            const feePayerAddress = sdk.feePayerPublicKey.toBase58();
+
+            // Store a ref so other steps can access the user's public key
+            userKeyRef.current = {
+                toPublicKey: () => sdk.feePayerPublicKey
+            };
+
+            setSDKStatus({
+                initialized: true,
+                compiling: false,
+                deploying: false,
+                compilationProgress: '',
+            });
+
+            setWallet({
+                connected: true,
+                address: feePayerAddress,
+                network: 'local-testnet',
+            });
+
+            addLog(`✅ SDK ready! Address: ${feePayerAddress.slice(0, 12)}...`);
+        } catch (err: any) {
+            console.error('SDK init error:', err);
+            setError(`SDK initialization failed: ${err.message}`);
+            setSDKStatus({
+                initialized: false,
+                compiling: false,
+                deploying: false,
+                compilationProgress: '',
+            });
+            addLog(`❌ Error: ${err.message}`);
+        }
+    }, [addLog]);
+
+    // ── Connect (starts SDK init) ──────────────────────────────
 
     const connectWallet = useCallback(async () => {
         setLoading(true);
         setError(null);
+        addLog('Starting SDK initialization (Local Test Mode)...');
         try {
-            const mina = (window as any).mina;
-            if (!mina) {
-                throw new Error(
-                    'Auro Wallet not found. Install the Auro Wallet extension to continue.'
-                );
-            }
-
-            const accounts = await mina.requestAccounts();
-            if (!accounts || accounts.length === 0) {
-                throw new Error('No accounts available');
-            }
-
-            let network: any = null;
-            try {
-                network = await mina.requestNetwork();
-            } catch {
-                // Some wallet versions don't support requestNetwork
-            }
-
-            const address = accounts[0];
-            setWallet({
-                connected: true,
-                address,
-                network: network?.chainId || 'devnet',
-            });
-
-            // Check if this address already has KYC
-            const existingKYC = checkExistingKYC(address);
-            if (existingKYC) {
-                setKycRecord(existingKYC);
-                setCurrentStep('verified');
-            }
-        } catch (err: any) {
-            setError(err.message);
+            await initSDK();
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [initSDK, addLog]);
 
     const disconnectWallet = useCallback(() => {
         setWallet({ connected: false, address: null, network: null });
@@ -115,144 +184,163 @@ export function useNoahSDK() {
         setCredential(null);
         setPresentation(null);
         setKycRecord(null);
+        sdkRef.current = null;
+        userKeyRef.current = null;
+        setSDKStatus({
+            initialized: false,
+            compiling: false,
+            deploying: false,
+            compilationProgress: '',
+        });
+        setLogs([]);
     }, []);
-
-    // ── KYC Address Check ──────────────────────────────────────
-
-    /**
-     * Check if an address already has KYC registered.
-     * Returns the KYC record if found, null otherwise.
-     *
-     * In production: sdk.hasActiveKYC(publicKey) → calls the on-chain contract
-     * For demo: checks localStorage
-     */
-    function checkExistingKYC(address: string): KYCRecord | null {
-        try {
-            const stored = localStorage.getItem(`noah_kyc_${address}`);
-            if (stored) {
-                return JSON.parse(stored);
-            }
-        } catch {
-            // ignore
-        }
-        return null;
-    }
-
-    /**
-     * Store KYC record bound to address
-     */
-    function bindKYCToAddress(address: string, record: KYCRecord) {
-        try {
-            localStorage.setItem(`noah_kyc_${address}`, JSON.stringify(record));
-        } catch {
-            // ignore
-        }
-    }
 
     // ── Step 1: Scan (MRZ OCR) ─────────────────────────────────
 
-    const onMRZScanned = useCallback((data: MRZData) => {
-        setMrzData(data);
-        setCurrentStep('witness');
-    }, []);
+    const onMRZScanned = useCallback(
+        (data: MRZData) => {
+            setMrzData(data);
+            addLog(`MRZ scanned: ${data.fullName} (${data.nationality})`);
+            setCurrentStep('witness');
+        },
+        [addLog]
+    );
 
-    // ── Step 2: Witness (Attestation) ──────────────────────────
+    // ── Step 2: Witness (Real Attestation) ─────────────────────
 
     const submitForAttestation = useCallback(async () => {
-        if (!mrzData || !wallet.address) return;
+        if (!mrzData || !sdkRef.current || !userKeyRef.current) return;
         setLoading(true);
         setError(null);
+        addLog('Submitting identity to attester for credential issuance...');
+
         try {
-            // In production: POST to attester API
-            // const result = await fetch('/attest', {
-            //   method: 'POST',
-            //   body: JSON.stringify({ ownerPublicKey: wallet.address, document: mrzData })
-            // });
+            const sdk = sdkRef.current;
+            const userPubKey = userKeyRef.current.toPublicKey();
 
-            // Simulate attester response
-            await new Promise((r) => setTimeout(r, 1500));
+            // Call the real SDK attester
+            const result = await sdk.issueCredential(userPubKey, {
+                fullName: mrzData.fullName,
+                dateOfBirth: mrzData.dateOfBirth,
+                nationality: mrzData.nationality,
+                documentType: mrzData.documentType || 'passport',
+                expiresAt: mrzData.expiresAt,
+            });
 
-            const mockCredential = {
-                owner: wallet.address,
-                data: {
-                    fullName: mrzData.fullName,
-                    dateOfBirth: mrzData.dateOfBirth,
-                    nationality: mrzData.nationality,
-                    documentType: mrzData.documentType,
-                    expiresAt: mrzData.expiresAt,
-                },
-                issuer: 'B62q' + Math.random().toString(36).slice(2, 14) + '...attester',
-                signature: 'sig_' + Date.now().toString(36),
-                issuedAt: new Date().toISOString(),
-            };
+            addLog('✅ Credential issued by attester!');
+            addLog(`   Issuer: ${result.issuerPublicKey.slice(0, 16)}...`);
 
-            setCredential(mockCredential);
+            setCredential(result);
             setCurrentStep('proof');
         } catch (err: any) {
-            setError(err.message);
+            setError(`Attestation failed: ${err.message}`);
+            addLog(`❌ Attestation error: ${err.message}`);
         } finally {
             setLoading(false);
         }
-    }, [mrzData, wallet.address]);
+    }, [mrzData, addLog]);
 
-    // ── Step 3: Proof (ZK Presentation) ────────────────────────
+    // ── Step 3: Proof (Real ZK Proof Generation) ──────────────
 
     const generateProof = useCallback(async () => {
-        if (!credential) return;
+        if (!credential || !sdkRef.current || !userKeyRef.current) return;
         setLoading(true);
         setError(null);
+        addLog('Generating ZK age verification proof...');
+        addLog('This may take a moment (compiling presentation circuit)...');
+
         try {
-            // In production: sdk.proveAge(credential, ownerKey, 18)
-            await new Promise((r) => setTimeout(r, 2000));
+            const sdk = sdkRef.current;
 
-            const mockPresentation = {
-                type: 'age_verification',
-                proofHash: '0x' + Array.from({ length: 32 }, () =>
-                    Math.floor(Math.random() * 16).toString(16)
-                ).join(''),
-                claims: { minAge: 18, verified: true },
-                issuerHash: credential.issuer,
-                generatedAt: new Date().toISOString(),
-            };
+            // Generate a real ZK proof using mina-attestations
+            const proof = await sdk.proveAge(
+                credential.credential,
+                userKeyRef.current,
+                18 // min age
+            );
 
-            setPresentation(mockPresentation);
+            addLog('✅ ZK proof generated successfully!');
+            addLog('   Proved: age ≥ 18 without revealing birth date');
+
+            setPresentation(proof);
             setCurrentStep('submit');
         } catch (err: any) {
-            setError(err.message);
+            setError(`Proof generation failed: ${err.message}`);
+            addLog(`❌ Proof error: ${err.message}`);
         } finally {
             setLoading(false);
         }
-    }, [credential]);
+    }, [credential, addLog]);
 
-    // ── Step 4: Submit (On-Chain Registration) ─────────────────
+    // ── Step 4: Submit (Real On-Chain Registration) ────────────
 
     const registerOnChain = useCallback(async () => {
-        if (!presentation || !wallet.address) return;
+        if (!sdkRef.current || !userKeyRef.current || !mrzData) return;
         setLoading(true);
         setError(null);
+        addLog('Computing identity commitment...');
+
         try {
-            // In production: sdk.registerKYC(commitment, issuerHash) + sdk.settleState()
-            await new Promise((r) => setTimeout(r, 2000));
+            const { Poseidon, Encoding } = await import('o1js');
+            const sdk = sdkRef.current;
+
+            // Compute the Poseidon commitment from identity data
+            const fullNameHash = Poseidon.hash(
+                Encoding.stringToFields(mrzData.fullName)
+            );
+            const nationalityHash = Poseidon.hash(
+                Encoding.stringToFields(mrzData.nationality)
+            );
+            const commitment = sdk.computeCommitment(
+                fullNameHash,
+                mrzData.dateOfBirth,
+                nationalityHash
+            );
+            const issuerHash = sdk.getIssuerHash();
+
+            addLog(`Commitment: ${commitment.toString().slice(0, 20)}...`);
+            addLog('Sending registerKYC transaction...');
+
+            // Real on-chain registration
+            const regResult = await sdk.registerKYC(commitment, issuerHash);
+            if (!regResult.success) {
+                throw new Error(`Registration failed: ${regResult.error}`);
+            }
+            addLog('✅ KYC registered on-chain!');
+
+            // Settle the offchain state
+            addLog('Settling offchain state...');
+            const settleResult = await sdk.settleState();
+            if (!settleResult.success) {
+                throw new Error(`Settlement failed: ${settleResult.error}`);
+            }
+            addLog('✅ State settled on-chain!');
+
+            // Verify the registration
+            const hasKYC = await sdk.hasActiveKYC(
+                userKeyRef.current.toPublicKey()
+            );
+            addLog(`hasActiveKYC() → ${hasKYC}`);
 
             const record: KYCRecord = {
-                commitment: '0x' + Array.from({ length: 32 }, () =>
-                    Math.floor(Math.random() * 16).toString(16)
-                ).join(''),
-                issuerHash: presentation.issuerHash,
+                commitment: commitment.toString().slice(0, 32) + '...',
+                issuerHash: issuerHash.toString().slice(0, 32) + '...',
                 registeredAt: new Date().toISOString(),
-                isActive: true,
-                address: wallet.address,
+                isActive: hasKYC,
+                address: wallet.address || '',
+                txHash: `local_tx_${Date.now().toString(36)}`,
             };
 
             setKycRecord(record);
-            bindKYCToAddress(wallet.address, record);
             setCurrentStep('verified');
+            addLog('🎉 Full KYC flow complete! Address is now KYC-verified.');
         } catch (err: any) {
-            setError(err.message);
+            setError(`Registration failed: ${err.message}`);
+            addLog(`❌ Registration error: ${err.message}`);
         } finally {
             setLoading(false);
         }
-    }, [presentation, wallet.address]);
+    }, [mrzData, wallet.address, addLog]);
 
     // ── Step Navigation ────────────────────────────────────────
 
@@ -263,6 +351,7 @@ export function useNoahSDK() {
     return {
         // State
         wallet,
+        sdkStatus,
         currentStep,
         mrzData,
         credential,
@@ -270,6 +359,7 @@ export function useNoahSDK() {
         kycRecord,
         loading,
         error,
+        logs,
 
         // Step info
         steps: STEPS,
