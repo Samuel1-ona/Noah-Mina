@@ -162,20 +162,35 @@ export function useNoahSDK() {
                 addLog(`   Contract: ${sdk.contract.address.toBase58().slice(0, 16)}...`);
             }
 
-            const feePayerAddress = sdk.feePayerPublicKey.toBase58();
-            userKeyRef.current = sdk.feePayerPrivateKey;
+            // Compile contracts (REQUIRED for both Local and Devnet to generate proofs)
+            addLog('Compiling contracts (this may take a minute)...');
+            setSDKStatus((s) => ({
+                ...s,
+                compilationProgress: 'Compiling contracts...',
+            }));
+            await sdk.compile();
+            addLog('✅ Contracts compiled!');
 
-            setSDKStatus({
+            const feePayerKey = sdk.feePayerPublicKey;
+            const feePayerAddress = feePayerKey ? feePayerKey.toBase58() : '';
+
+            if (sdk.feePayerPrivateKey) {
+                userKeyRef.current = sdk.feePayerPrivateKey;
+            }
+
+            setSDKStatus((s) => ({
+                ...s,
                 initialized: true,
                 compiling: false,
                 deploying: false,
                 compilationProgress: '',
-            });
+            }));
 
+            // 2. Set Wallet State
             setWallet({
                 connected: true,
                 address: feePayerAddress,
-                network: networkMode === 'local' ? 'local-testnet' : 'devnet',
+                network: networkMode === 'local' ? 'LocalBlockchain' : 'Mina Devnet',
             });
 
             addLog(`✅ SDK ready! Address: ${feePayerAddress.slice(0, 12)}...`);
@@ -356,18 +371,25 @@ export function useNoahSDK() {
             addLog(`Commitment: ${commitment.toString().slice(0, 20)}...`);
             addLog('Sending registerKYC transaction...');
 
-            // Real on-chain registration
+            addLog('Sending registerKYC transaction...');
             const regResult = await sdk.registerKYC(commitment, issuerHash);
-            if (!regResult.success) {
-                throw new Error(`Registration failed: ${regResult.error}`);
-            }
+            if (!regResult.success) throw new Error(regResult.error);
             addLog('✅ KYC registered on-chain!');
 
-            // Settle the offchain state
+            if (regResult.pendingTx) {
+                addLog('Waiting for transaction inclusion (approx. 3 mins)...');
+                await regResult.pendingTx.wait();
+                addLog('✅ Transaction confirmed in block!');
+            }
+
             addLog('Settling offchain state...');
             const settleResult = await sdk.settleState();
-            if (!settleResult.success) {
-                throw new Error(`Settlement failed: ${settleResult.error}`);
+            if (!settleResult.success) throw new Error(`Settlement failed: ${settleResult.error}`);
+
+            if (settleResult.pendingTx) {
+                addLog('Waiting for settlement confirmation...');
+                await settleResult.pendingTx.wait();
+                addLog('✅ Settlement confirmed!');
             }
             addLog('✅ State settled on-chain!');
 
