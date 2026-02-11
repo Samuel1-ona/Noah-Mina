@@ -95,8 +95,12 @@ export function useNoahSDK() {
     // ── Initialize SDK ────────────────────────────────────────
 
     const initSDK = useCallback(async () => {
+        // console.log('[useNoahSDK] version: 2026-02-11T13:15 - Initializing SDK (HMR Force) v2');
+        setError(null);
+
         setSDKStatus((s) => ({
             ...s,
+            initialized: false,
             compiling: true,
             compilationProgress: 'Loading o1js...',
         }));
@@ -294,6 +298,14 @@ export function useNoahSDK() {
 
         try {
             const sdk = sdkRef.current;
+
+            console.log('[useNoahSDK] generateProof inputs:', {
+                hasCredential: !!credential,
+                hasSDK: !!sdk,
+                hasUserKey: !!userKeyRef.current,
+                userKeyType: userKeyRef.current?.constructor?.name,
+                credType: credential?.credential?.constructor?.name,
+            });
 
             // Generate a real ZK proof using mina-attestations
             const proof = await sdk.proveAge(

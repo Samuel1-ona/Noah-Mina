@@ -30,5 +30,9 @@ export default defineConfig({
   // Resolve linked packages properly
   resolve: {
     preserveSymlinks: true,
+    alias: {
+      'noah-mina-sdk': '/Users/machine/Documents/Noah-Mina/packages/noah-mina-sdk/build/src/index.js',
+      'o1js': '/Users/machine/Documents/Noah-Mina/frontend-example/node_modules/o1js'
+    },
   },
 })
