@@ -29,9 +29,14 @@ interface MRZScannerProps {
 
 /** Convert MRZ date (YYMMDD) to YYYYMMDD */
 function mrzDateToYYYYMMDD(dateStr: string, isBirth: boolean): number {
+    if (!dateStr || dateStr.length < 6) return 0;
+
     const yy = parseInt(dateStr.substring(0, 2), 10);
     const mm = dateStr.substring(2, 4);
     const dd = dateStr.substring(4, 6);
+
+    if (isNaN(yy)) return 0;
+
     // For birth dates, assume 1900s if > current 2-digit year, else 2000s
     // For expiry dates, always assume 2000s
     let yyyy: number;
@@ -41,7 +46,9 @@ function mrzDateToYYYYMMDD(dateStr: string, isBirth: boolean): number {
     } else {
         yyyy = 2000 + yy;
     }
-    return parseInt(`${yyyy}${mm}${dd}`, 10);
+
+    const result = parseInt(`${yyyy}${mm}${dd}`, 10);
+    return isNaN(result) ? 0 : result;
 }
 
 export function MRZScanner({ onScanComplete, loading }: MRZScannerProps) {
@@ -200,6 +207,19 @@ export function MRZScanner({ onScanComplete, loading }: MRZScannerProps) {
                         onChange={handleFileSelect}
                         style={{ display: 'none' }}
                     />
+                    <button type="button" onClick={() => onScanComplete({
+                        firstName: 'JEAN',
+                        lastName: 'DUPONT',
+                        fullName: 'JEAN DUPONT',
+                        dateOfBirth: 19900101,
+                        nationality: 'FR',
+                        documentNumber: '123456789',
+                        documentType: 'passport',
+                        expiresAt: 20300101,
+                        sex: 'M',
+                        issuingState: 'FR',
+                        raw: 'dummy',
+                    })}>Fake Scan</button>
                 </div>
             ) : scanning ? (
                 <div className="scan-progress">

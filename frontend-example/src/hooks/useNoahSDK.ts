@@ -411,6 +411,8 @@ export function useNoahSDK() {
             }
 
             // Call the real SDK attester
+            console.log('[Debug] Submitting MRZ Data:', JSON.stringify(mrzData, null, 2));
+
             const result = await sdk.issueCredential(userPubKey, {
                 fullName: mrzData.fullName,
                 dateOfBirth: mrzData.dateOfBirth,
@@ -444,13 +446,18 @@ export function useNoahSDK() {
         try {
             const sdk = sdkRef.current;
 
-            console.log('[useNoahSDK] generateProof inputs:', {
+            console.log('[Debug] generateProof inputs:', {
                 hasCredential: !!credential,
                 hasSDK: !!sdk,
-                hasUserKey: !!userKeyRef.current,
-                userKeyType: userKeyRef.current?.constructor?.name,
                 credType: credential?.credential?.constructor?.name,
             });
+
+            if (credential?.credential?.data) {
+                console.log('[Debug] Credential Data:', {
+                    dob: credential.credential.data.dateOfBirth,
+                    expires: credential.credential.data.expiresAt,
+                });
+            }
 
             // Generate a real ZK proof using mina-attestations
             const proof = await sdk.proveAge(
