@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "mrz": "^5.0.1",
-    "noah-mina-sdk": "file:../packages/noah-mina-sdk",
+    "noah-mina": "0.1.1",
     "o1js": "^2.13.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

@@ -13,6 +13,8 @@ import { MRZScanner } from './components/MRZScanner';
 import { useRef, useEffect } from 'react';
 import './styles.css';
 
+import NoahLogo from './assets/NoahLogo.png';
+
 function App() {
   const sdk = useNoahSDK();
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -312,8 +314,7 @@ function App() {
       <header className="header">
         <div className="header-left">
           <div className="logo">
-            <span className="logo-icon">🛡️</span>
-            <span className="logo-text">Noah</span>
+            <img src={NoahLogo} alt="Noah Logo" style={{ height: '40px' }} />
           </div>
         </div>
         <div className="header-right">

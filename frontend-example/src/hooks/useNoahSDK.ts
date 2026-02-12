@@ -159,7 +159,7 @@ export function useNoahSDK() {
         addLog(`Importing o1js and noah-mina-sdk (${networkMode} mode)...`);
 
         try {
-            const { NoahSDK } = await import('noah-mina-sdk');
+            const { NoahSDK } = await import('noah-mina');
             const { PublicKey } = await import('o1js');
 
             let sdk;
@@ -246,7 +246,7 @@ export function useNoahSDK() {
             addLog(`✅ SDK ready! Address: ${feePayerAddress.slice(0, 12)}...`);
 
             // ── KYC Status Guard ──────────────────────────────────
-            if (networkMode === 'local') {
+            if (networkMode === 'local' && sdk.feePayerPublicKey) {
                 addLog('Checking KYC status...');
                 const hasKYC = await sdk.hasActiveKYC(sdk.feePayerPublicKey);
                 if (hasKYC) {
