@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "deployAliases": {
+    "devnet": {
+      "url": "https://api.minascan.io/node/devnet/v1/graphql",
+      "keyPath": "keys/devnet.json",
+      "fee": "0.1",
+      "feepayerKeyPath": "keys/feepayer.json",
+      "feepayerAlias": "MyFeePayer",
+      "smartContract": "NoahKYCRegistry"
+    }
+  }
+}
