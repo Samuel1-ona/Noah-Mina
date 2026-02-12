@@ -10,9 +10,9 @@ export default defineConfig({
     target: 'esnext',
   },
 
-  // Prevent Vite from pre-bundling o1js and our local SDK (to avoid stale cache)
+  // Prevent Vite from pre-bundling o1js and our SDK (to avoid stale cache)
   optimizeDeps: {
-    exclude: ['o1js', 'noah-mina-sdk'],
+    exclude: ['o1js', 'noah-mina'], // 'noah-mina' is the new package name
     esbuildOptions: {
       target: 'esnext',
     },
@@ -27,12 +27,8 @@ export default defineConfig({
     },
   },
 
-  // Resolve linked packages properly
-  resolve: {
-    preserveSymlinks: true,
-    alias: {
-      'noah-mina-sdk': '/Users/machine/Documents/Noah-Mina/packages/noah-mina-sdk/build/src/index.js',
-      'o1js': '/Users/machine/Documents/Noah-Mina/frontend-example/node_modules/o1js'
-    },
+  // Worker config for o1js
+  worker: {
+    format: 'es',
   },
 })
