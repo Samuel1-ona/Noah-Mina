@@ -1,73 +1,65 @@
-# React + TypeScript + Vite
+# Noah-Mina Frontend Example 🎨
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**A Reference Implementation for ZK-KYC on Mina.**
 
-Currently, two official plugins are available:
+This is a React + Vite application that demonstrates the full end-to-end flow of the Noah-Mina system. It provides a UI for users to scan passports, generate proofs, and submit them to the blockchain.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## ✨ Features
 
-## React Compiler
+-   **Passport Scanning**: Uses `Tesseract.js` to read MRZ data from passport images in the browser.
+-   **Wallet Connection**: Integrates with **Auro Wallet** for signing transactions.
+-   **ZK Proof Generation**: Generates zero-knowledge proofs locally using `o1js` and `noah-mina-sdk`.
+-   **Real-time Status**: Tracks the user's KYC status on the Mina Devnet.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 🚀 Getting Started
 
-## Expanding the ESLint configuration
+### 1. Environment Setup
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Copy `.env.example` to `.env`:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cp .env.example .env
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Ensure you have the following variables (defaults provided for Devnet):
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```env
+VITE_MINA_NETWORK_URL=https://api.minascan.io/node/devnet/v1/graphql
+VITE_CONTRACT_ADDRESS=B62qo2o6fkyLRTgDpVWiyQGtQQvSVGSCAALVvkq1QnxwJH2SWXEwLaT
 ```
+
+### 2. Install & Run
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:5174](http://localhost:5174) in your browser.
+
+## 🛠️ Key Components
+
+### `useNoahSDK` Hook
+This custom hook (`src/hooks/useNoahSDK.ts`) manages the complex state machine of the KYC process.
+
+```typescript
+const { 
+  connectWallet, 
+  scanMRZ, 
+  generateProof, 
+  registerOnChain, 
+  step 
+} = useNoahSDK();
+```
+
+It handles:
+1.  **Initialization**: Loading the heavy ZK libraries (`o1js`) lazily.
+2.  **Wallet Logic**: Switching accounts and detecting changes.
+3.  **Flow Control**: Managing the `Scan -> Verify -> Proof -> Submit` pipeline.
+
+### `MRZScanner` Component
+A wrapper around the camera and OCR logic. It parses the raw text from the physical document into structured JSON (`Name`, `DOB`, `Expiry`) that the SDK can consume.
+
+---
+
+*Powered by Noah-Mina SDK*

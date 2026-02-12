@@ -44,6 +44,14 @@ export interface KYCRecord {
     txHash?: string;
 }
 
+export interface IdentityDocument {
+    fullName: string;
+    dateOfBirth: number;
+    nationality: string;
+    documentType: string;
+    expiresAt: number;
+}
+
 export interface SDKStatus {
     initialized: boolean;
     compiling: boolean;
@@ -91,6 +99,50 @@ export function useNoahSDK() {
         setLogs((prev) => [...prev, `[${timestamp}] ${msg}`]);
         console.log(`[NoahSDK] ${msg}`);
     }, []);
+
+    // ── Helper: Check KYC for an address ───────────────────────
+
+    const checkKYC = useCallback(async (address: string) => {
+        if (!sdkRef.current) return;
+
+        try {
+            addLog(`Checking KYC status for ${address.slice(0, 8)}...`);
+            const { PublicKey } = await import('o1js');
+            const userKey = PublicKey.fromBase58(address);
+
+            // Add a small delay to ensure state updates settle if needed
+            await new Promise(r => setTimeout(r, 500));
+
+            const record = await sdkRef.current.getKYCStatus(userKey);
+            console.log('[Debug] KYC Record for', address, ':', record);
+
+            if (record) {
+                const isActive = record.isActive.toBoolean();
+                if (isActive) {
+                    addLog('✨ Address already has an active KYC record.');
+                    setKycRecord({
+                        commitment: record.commitment.toString(),
+                        issuerHash: record.issuerHash.toString(),
+                        registeredAt: record.registeredAt.toString(),
+                        isActive: true,
+                        address: address,
+                    });
+                    setCurrentStep('verified');
+                } else {
+                    addLog('Address has a revoked/inactive KYC record.');
+                    setKycRecord(null);
+                    setCurrentStep('scan');
+                }
+            } else {
+                addLog('Address is not verified (No record found). Ready to scan.');
+                setKycRecord(null);
+                setCurrentStep('scan');
+            }
+        } catch (e: any) {
+            console.error('Error checking KYC:', e);
+            addLog(`Error checking KYC: ${e.message}`);
+        }
+    }, [addLog]);
 
     // ── Initialize SDK ────────────────────────────────────────
 
@@ -252,24 +304,8 @@ export function useNoahSDK() {
                 }));
                 addLog(`Wallet connected: ${address.slice(0, 8)}...`);
 
-                // If check KYC status
-                if (sdkRef.current) {
-                    addLog('Checking KYC status for connected wallet...');
-                    const hasKYC = await sdkRef.current.hasActiveKYC(
-                        (await import('o1js')).PublicKey.fromBase58(address)
-                    );
-                    if (hasKYC) {
-                        addLog('✨ Address already has an active KYC record.');
-                        setKycRecord({
-                            commitment: 'Exists on-chain',
-                            issuerHash: 'Verified Attester',
-                            registeredAt: new Date().toISOString(),
-                            isActive: true,
-                            address: address,
-                        });
-                        setCurrentStep('verified');
-                    }
-                }
+                // Check KYC status
+                await checkKYC(address);
             }
         } catch (err: any) {
             console.error('Wallet connection failed:', err);
@@ -277,7 +313,7 @@ export function useNoahSDK() {
         } finally {
             setLoading(false);
         }
-    }, [initSDK, addLog, networkMode]);
+    }, [initSDK, addLog, networkMode, checkKYC]);
 
     // ── Disconnect ─────────────────────────────────────────────
 
@@ -299,6 +335,7 @@ export function useNoahSDK() {
         setLogs([]);
     }, []);
 
+
     // ── Listen for Account Changes ─────────────────────────────
 
     useEffect(() => {
@@ -309,57 +346,24 @@ export function useNoahSDK() {
             if (accounts.length > 0) {
                 const newAddress = accounts[0];
                 if (newAddress !== wallet.address) {
-                    addLog(`🔄 Wallet switched to: ${newAddress.slice(0, 8)}...`);
-
+                    // Update wallet state immediately
                     setWallet(prev => ({
                         ...prev,
                         address: newAddress,
+                        connected: true
                     }));
 
-                    // Reset step and check KYC for new address
-                    setCurrentStep('scan');
-                    setKycRecord(null);
-                    setMrzData(null);
+                    addLog(`🔄 Wallet switched to: ${newAddress.slice(0, 8)}...`);
+
                     setCredential(null);
                     setPresentation(null);
+                    setError(null);
 
-                    if (sdkRef.current) {
-                        try {
-                            addLog('Checking KYC status for new address...');
-                            const { PublicKey } = await import('o1js');
-                            const userKey = PublicKey.fromBase58(newAddress);
-
-                            const record = await sdkRef.current.getKYCStatus(userKey);
-                            console.log('[Debug] KYC Record:', record);
-
-                            if (record) {
-                                const isActive = record.isActive.toBoolean();
-                                const commitment = record.commitment.toString();
-                                addLog(`[Debug] Record found: isActive=${isActive}, commitment=${commitment.slice(0, 10)}...`);
-
-                                if (isActive) {
-                                    addLog('✨ New address already has an active KYC record.');
-                                    setKycRecord({
-                                        commitment: commitment,
-                                        issuerHash: record.issuerHash.toString(),
-                                        registeredAt: record.registeredAt.toString(),
-                                        isActive: true,
-                                        address: newAddress,
-                                    });
-                                    setCurrentStep('verified');
-                                } else {
-                                    addLog('Address has a revoked/inactive KYC record.');
-                                }
-                            } else {
-                                addLog('New address is not verified (No record found). Ready to scan.');
-                            }
-                        } catch (e: any) {
-                            console.error('Error checking KYC for new account:', e);
-                        }
-                    }
+                    // Check KYC status for new address
+                    await checkKYC(newAddress);
                 }
             } else {
-                // User disconnected logic if needed
+                // User disconnected wallet
                 disconnectWallet();
             }
         };
@@ -367,12 +371,9 @@ export function useNoahSDK() {
         mina.on('accountsChanged', handleAccountsChanged);
 
         return () => {
-            // Safe removal check
-            if (mina.removeListener) {
-                mina.removeListener('accountsChanged', handleAccountsChanged);
-            }
+            mina.removeListener('accountsChanged', handleAccountsChanged);
         };
-    }, [wallet.connected, wallet.address, addLog, disconnectWallet]);
+    }, [wallet.connected, wallet.address, disconnectWallet, addLog]);
 
     // ── Step 1: Scan (MRZ OCR) ─────────────────────────────────
 

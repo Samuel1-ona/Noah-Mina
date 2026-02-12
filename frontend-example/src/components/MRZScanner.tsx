@@ -51,7 +51,7 @@ function mrzDateToYYYYMMDD(dateStr: string, isBirth: boolean): number {
     return isNaN(result) ? 0 : result;
 }
 
-export function MRZScanner({ onScanComplete, loading }: MRZScannerProps) {
+export function MRZScanner({ onScanComplete }: MRZScannerProps) {
     const [dragOver, setDragOver] = useState(false);
     const [preview, setPreview] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
@@ -196,9 +196,9 @@ export function MRZScanner({ onScanComplete, loading }: MRZScannerProps) {
                     <button
                         className="btn btn-upload"
                         type="button"
-                        disabled={loading || scanning}
+                        onClick={() => fileInputRef.current?.click()}
                     >
-                        Verify Identity
+                        Upload Passport Photo
                     </button>
                     <input
                         ref={fileInputRef}
@@ -207,19 +207,6 @@ export function MRZScanner({ onScanComplete, loading }: MRZScannerProps) {
                         onChange={handleFileSelect}
                         style={{ display: 'none' }}
                     />
-                    <button type="button" onClick={() => onScanComplete({
-                        firstName: 'JEAN',
-                        lastName: 'DUPONT',
-                        fullName: 'JEAN DUPONT',
-                        dateOfBirth: 19900101,
-                        nationality: 'FR',
-                        documentNumber: '123456789',
-                        documentType: 'passport',
-                        expiresAt: 20300101,
-                        sex: 'M',
-                        issuingState: 'FR',
-                        raw: 'dummy',
-                    })}>Fake Scan</button>
                 </div>
             ) : scanning ? (
                 <div className="scan-progress">

@@ -34,7 +34,7 @@ export function KYCRegistration({
         setter(value);
         // Convert YYYY-MM-DD to YYYYMMDD number
         const numeric = parseInt(value.replace(/-/g, ''), 10);
-        setForm((prev) => ({ ...prev, [field]: isNaN(numeric) ? 0 : numeric }));
+        setForm((prev: IdentityDocument) => ({ ...prev, [field]: isNaN(numeric) ? 0 : numeric }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -96,7 +96,7 @@ export function KYCRegistration({
                             placeholder="Samuel Onah"
                             value={form.fullName}
                             onChange={(e) =>
-                                setForm((prev) => ({ ...prev, fullName: e.target.value }))
+                                setForm((prev: IdentityDocument) => ({ ...prev, fullName: e.target.value }))
                             }
                         />
                     </div>
@@ -133,7 +133,7 @@ export function KYCRegistration({
                                 id="nationality"
                                 value={form.nationality}
                                 onChange={(e) =>
-                                    setForm((prev) => ({ ...prev, nationality: e.target.value }))
+                                    setForm((prev: IdentityDocument) => ({ ...prev, nationality: e.target.value }))
                                 }
                             >
                                 <option value="">Select...</option>
@@ -153,7 +153,7 @@ export function KYCRegistration({
                                 id="docType"
                                 value={form.documentType}
                                 onChange={(e) =>
-                                    setForm((prev) => ({
+                                    setForm((prev: IdentityDocument) => ({
                                         ...prev,
                                         documentType: e.target.value,
                                     }))
