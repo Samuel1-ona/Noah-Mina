@@ -160,7 +160,7 @@ export function useNoahSDK() {
 
         try {
             const { NoahSDK } = await import('noah-mina-sdk');
-            const { PrivateKey, PublicKey } = await import('o1js');
+            const { PublicKey } = await import('o1js');
 
             let sdk;
             if (networkMode === 'local') {
@@ -181,8 +181,6 @@ export function useNoahSDK() {
                     compilationProgress: 'Connecting to Devnet...',
                 }));
 
-                const feePayerKeyStr = import.meta.env.VITE_FEE_PAYER_KEY;
-
                 if (!devnetContractAddress) {
                     throw new Error('Please enter the NoahKYCRegistry contract address for Devnet mode. You can get this after running "zk deploy devnet".');
                 }
@@ -191,7 +189,7 @@ export function useNoahSDK() {
                     network: devnetUrl,
                     archiveUrl: archiveUrl,
                     contractAddress: PublicKey.fromBase58(devnetContractAddress),
-                    feePayerKey: feePayerKeyStr ? PrivateKey.fromBase58(feePayerKeyStr) : undefined,
+                    // feePayerKey: feePayerKeyStr ? PrivateKey.fromBase58(feePayerKeyStr) : undefined,
                 });
             }
 
